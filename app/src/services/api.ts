@@ -9,9 +9,10 @@ import {
   TravelDirection,
 } from '../types';
 
+const RAW_API_BASE =
+  typeof process !== 'undefined' ? process.env?.EXPO_PUBLIC_API_URL : undefined;
 const DEFAULT_API_BASE =
-  (typeof process !== 'undefined' && process.env?.EXPO_PUBLIC_API_URL) ||
-  'http://localhost:4000';
+  RAW_API_BASE === 'same-origin' ? '' : RAW_API_BASE || 'http://localhost:4000';
 
 const BACKEND_SOURCE_MAP: Record<string, SourceType> = {
   acartia: 'acartia_orca_network',
