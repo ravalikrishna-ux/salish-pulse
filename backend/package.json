@@ -1,0 +1,20 @@
+{
+  "name": "salishpulse-backend",
+  "version": "1.0.0",
+  "description": "Near-real-time Puget Sound orca sighting aggregation, NLP normalization, spatio-temporal deduplication, ETA prediction, and SSE streaming backend",
+  "type": "module",
+  "private": true,
+  "engines": {
+    "node": ">=22.18.0"
+  },
+  "scripts": {
+    "start": "node src/server.ts",
+    "dev": "node --watch src/server.ts",
+    "test": "node --test src/server.test.ts",
+    "typecheck": "tsc --noEmit"
+  },
+  "devDependencies": {
+    "@types/node": "^22.10.0",
+    "typescript": "^5.8.0"
+  }
+}

@@ -1,0 +1,36 @@
+name = "salishpulse-edge"
+main = "src/worker.ts"
+compatibility_date = "2026-01-01"
+compatibility_flags = ["nodejs_compat"]
+
+[triggers]
+crons = ["*/1 * * * *"]
+
+[[kv_namespaces]]
+binding = "HOT_CACHE"
+id = "REPLACE_WITH_PRODUCTION_KV_NAMESPACE_ID"
+preview_id = "REPLACE_WITH_PREVIEW_KV_NAMESPACE_ID"
+
+[[durable_objects.bindings]]
+name = "SIGHTING_HUB"
+class_name = "SightingHubDO"
+
+[[migrations]]
+tag = "v1"
+new_classes = ["SightingHubDO"]
+
+[[queues.producers]]
+binding = "INGEST_QUEUE"
+queue = "orca-ingest-queue"
+
+[[queues.consumers]]
+queue = "orca-ingest-queue"
+max_batch_size = 25
+max_batch_timeout = 2
+max_retries = 3
+dead_letter_queue = "orca-ingest-dlq"
+
+[vars]
+EXPO_PUSH_LIVE = "false"
+LLM_PROVIDER = "gemini"
+LLM_MODEL = "gemini-2.5-flash-lite"

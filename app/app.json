@@ -1,0 +1,42 @@
+{
+  "expo": {
+    "name": "SalishPulse — Seattle Orca Tracker",
+    "slug": "salish-pulse",
+    "version": "1.0.0",
+    "orientation": "default",
+    "icon": "./assets/icon.png",
+    "userInterfaceStyle": "automatic",
+    "ios": {
+      "supportsTablet": true,
+      "bundleIdentifier": "org.salishpulse.orcatracker",
+      "buildNumber": "1",
+      "infoPlist": {
+        "ITSAppUsesNonExemptEncryption": false,
+        "NSLocationWhenInUseUsageDescription": "SalishPulse uses your location to calculate nearby Puget Sound shore viewing spots and pod arrival ETAs."
+      }
+    },
+    "plugins": [
+      [
+        "expo-notifications",
+        {
+          "icon": "./assets/icon.png",
+          "color": "#0E7C72"
+        }
+      ]
+    ],
+    "android": {
+      "package": "org.salishpulse.orcatracker",
+      "adaptiveIcon": {
+        "backgroundColor": "#0B2239",
+        "foregroundImage": "./assets/android-icon-foreground.png",
+        "backgroundImage": "./assets/android-icon-background.png",
+        "monochromeImage": "./assets/android-icon-monochrome.png"
+      },
+      "predictiveBackGestureEnabled": false
+    },
+    "web": {
+      "bundler": "metro",
+      "favicon": "./assets/favicon.png"
+    }
+  }
+}
