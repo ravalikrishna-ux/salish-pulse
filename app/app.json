@@ -36,7 +36,12 @@
     },
     "web": {
       "bundler": "metro",
-      "favicon": "./assets/favicon.png"
+      "favicon": "./assets/favicon.png",
+      "name": "SalishPulse — Seattle Orca Tracker",
+      "shortName": "SalishPulse",
+      "themeColor": "#0B1F2E",
+      "backgroundColor": "#0B1F2E",
+      "display": "standalone"
     }
   }
 }

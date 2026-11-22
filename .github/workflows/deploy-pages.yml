@@ -1,0 +1,48 @@
+name: Deploy Web App (Cloudflare Pages)
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'app/**'
+      - '.github/workflows/deploy-pages.yml'
+  workflow_dispatch:
+
+jobs:
+  deploy-cloudflare-pages:
+    name: Build & Deploy Expo Web to Cloudflare Pages
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: app
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js 22
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: 'npm'
+          cache-dependency-path: app/package-lock.json
+
+      - name: Install dependencies & export Expo Web bundle
+        env:
+          EXPO_PUBLIC_API_URL: ${{ vars.EXPO_PUBLIC_API_URL }}
+        run: |
+          npm ci
+          npx expo export --platform web
+
+      - name: Publish dist/ to Cloudflare Pages (when secrets configured)
+        if: ${{ secrets.CLOUDFLARE_API_TOKEN != '' && secrets.CLOUDFLARE_ACCOUNT_ID != '' }}
+        uses: cloudflare/wrangler-action@v3
+        with:
+          apiToken: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          accountId: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+          workingDirectory: app
+          command: pages deploy dist --project-name=salish-pulse --branch=${{ github.ref_name }}
+
+      - name: Skip notice when using Cloudflare Git Integration directly
+        if: ${{ secrets.CLOUDFLARE_API_TOKEN == '' || secrets.CLOUDFLARE_ACCOUNT_ID == '' }}
+        run: |
+          echo "Expo Web build verified (app/dist). Connect salish-pulse directly in dash.cloudflare.com -> Workers & Pages (zero secrets needed), or add CLOUDFLARE_API_TOKEN + CLOUDFLARE_ACCOUNT_ID secrets for GitHub Actions deploy."

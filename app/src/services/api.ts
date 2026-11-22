@@ -9,10 +9,20 @@ import {
   TravelDirection,
 } from '../types';
 
-const RAW_API_BASE =
-  typeof process !== 'undefined' ? process.env?.EXPO_PUBLIC_API_URL : undefined;
-const DEFAULT_API_BASE =
-  RAW_API_BASE === 'same-origin' ? '' : RAW_API_BASE || 'http://localhost:4000';
+function resolveApiBase(): string | null {
+  const raw =
+    typeof process !== 'undefined' ? process.env?.EXPO_PUBLIC_API_URL?.trim() : undefined;
+  if (raw === 'same-origin') return '';
+  if (raw) return raw.replace(/\/+$/, '');
+  // On HTTPS hosted builds (e.g. Cloudflare Pages on iPhone Safari) without an API URL set yet,
+  // skip localhost requests to avoid mixed-content errors and instant-load local simulation mode.
+  if (typeof window !== 'undefined' && window.location?.protocol === 'https:') {
+    return null;
+  }
+  return 'http://localhost:4000';
+}
+
+const DEFAULT_API_BASE = resolveApiBase();
 
 const BACKEND_SOURCE_MAP: Record<string, SourceType> = {
   acartia: 'acartia_orca_network',
@@ -47,6 +57,7 @@ async function fetchWithTimeout(url: string, init: RequestInit = {}, timeoutMs =
 }
 
 export async function fetchSightingsFromBackend(): Promise<Sighting[] | null> {
+  if (DEFAULT_API_BASE === null) return null;
   try {
     const res = await fetchWithTimeout(`${DEFAULT_API_BASE}/api/sightings`, {}, 1800);
     if (!res.ok) return null;
@@ -60,6 +71,7 @@ export async function fetchSightingsFromBackend(): Promise<Sighting[] | null> {
 }
 
 export async function fetchHydrophonesFromBackend(): Promise<HydrophoneNode[] | null> {
+  if (DEFAULT_API_BASE === null) return null;
   try {
     const res = await fetchWithTimeout(`${DEFAULT_API_BASE}/api/hydrophones`, {}, 1800);
     if (!res.ok) return null;
@@ -88,6 +100,7 @@ export async function fetchHydrophonesFromBackend(): Promise<HydrophoneNode[] | 
 }
 
 export async function fetchConservationStatusFromBackend(): Promise<ConservationFreezeStatus | null> {
+  if (DEFAULT_API_BASE === null) return null;
   try {
     const res = await fetchWithTimeout(`${DEFAULT_API_BASE}/api/conservation/status`, {}, 1800);
     if (!res.ok) return null;
@@ -109,6 +122,7 @@ export async function syncSubscriptionToBackend(
   prefs: AlertPreferences,
   registration: { id?: string; channel: 'expo' | 'web_push'; token: string }
 ): Promise<string | null> {
+  if (DEFAULT_API_BASE === null) return null;
   try {
     const ecotypes: string[] = [];
     if (prefs.includeSrkw) ecotypes.push('SRKW');
@@ -146,6 +160,7 @@ export async function postSocialOrSightingToBackend(payload: {
   source: SourceType;
   handle: string;
 }): Promise<{ ok: true; sighting: Sighting } | { ok: false; rejectedReason?: string } | null> {
+  if (DEFAULT_API_BASE === null) return null;
   try {
     const res = await fetchWithTimeout(
       `${DEFAULT_API_BASE}/api/ingest/social`,
@@ -181,7 +196,7 @@ export function subscribeToLiveStream(
   onSighting: (sighting: Sighting) => void,
   onStatusChange?: (connected: boolean) => void
 ): () => void {
-  if (typeof EventSource === 'undefined') {
+  if (DEFAULT_API_BASE === null || typeof EventSource === 'undefined') {
     onStatusChange?.(false);
     return () => {};
   }
