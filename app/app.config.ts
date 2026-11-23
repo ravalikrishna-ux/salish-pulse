@@ -6,6 +6,7 @@ export default ({ config }: ConfigContext): ExpoConfig => {
     process.env.IOS_BUNDLE_ID?.trim() ||
     config.ios?.bundleIdentifier ||
     'org.salishpulse.orcatracker';
+  const baseUrl = process.env.EXPO_BASE_URL?.trim();
 
   return {
     ...config,
@@ -14,6 +15,10 @@ export default ({ config }: ConfigContext): ExpoConfig => {
     ios: {
       ...config.ios,
       bundleIdentifier,
+    },
+    experiments: {
+      ...(config.experiments ?? {}),
+      ...(baseUrl ? { baseUrl } : {}),
     },
     extra: {
       ...(config.extra ?? {}),
