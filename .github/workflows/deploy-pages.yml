@@ -1,0 +1,56 @@
+name: Deploy Web App (Cloudflare Pages)
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'app/**'
+      - '.github/workflows/deploy-pages.yml'
+  workflow_dispatch:
+
+jobs:
+  deploy-cloudflare-pages:
+    name: Build & Deploy Expo Web to Cloudflare Pages
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: app
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js 22
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: 'npm'
+          cache-dependency-path: app/package-lock.json
+
+      - name: Install dependencies & export Expo Web bundle
+        env:
+          EXPO_PUBLIC_API_URL: ${{ vars.EXPO_PUBLIC_API_URL }}
+        run: |
+          npm ci
+          npx expo export --platform web
+
+      - name: Check Cloudflare deploy secrets
+        id: cf_check
+        env:
+          CF_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CF_ACCOUNT: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+        run: |
+          if [ -n "$CF_TOKEN" ] && [ -n "$CF_ACCOUNT" ]; then
+            echo "configured=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "configured=false" >> "$GITHUB_OUTPUT"
+            echo "Expo Web build verified (app/dist). Add CLOUDFLARE_API_TOKEN and CLOUDFLARE_ACCOUNT_ID to deploy via GitHub Actions, or connect directly in Cloudflare/Vercel."
+          fi
+
+      - name: Publish dist/ to Cloudflare Pages
+        if: steps.cf_check.outputs.configured == 'true'
+        uses: cloudflare/wrangler-action@v3
+        with:
+          apiToken: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          accountId: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+          workingDirectory: app
+          command: pages deploy dist --project-name=salish-pulse --branch=${{ github.ref_name }}

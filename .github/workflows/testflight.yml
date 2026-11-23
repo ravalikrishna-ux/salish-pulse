@@ -11,6 +11,14 @@ on:
         options:
           - 'true'
           - 'false'
+      dry_run:
+        description: 'Validate secrets, TypeScript, and iOS prebuild without triggering an EAS cloud build'
+        required: true
+        default: 'false'
+        type: choice
+        options:
+          - 'false'
+          - 'true'
   push:
     tags:
       - 'v*'
@@ -22,22 +30,114 @@ jobs:
     defaults:
       run:
         working-directory: app
+    env:
+      EXPO_PROJECT_ID: ${{ secrets.EXPO_PROJECT_ID }}
+      IOS_BUNDLE_ID: ${{ vars.IOS_BUNDLE_ID }}
+      EXPO_PUBLIC_API_URL: ${{ vars.EXPO_PUBLIC_API_URL }}
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-node@v4
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js 22
+        uses: actions/setup-node@v4
         with:
           node-version: '22'
           cache: 'npm'
           cache-dependency-path: app/package-lock.json
-      - uses: expo/expo-github-action@v8
+
+      - name: Pre-flight check required TestFlight secrets
+        env:
+          EXPO_TOKEN: ${{ secrets.EXPO_TOKEN }}
+          ASC_APP_ID: ${{ secrets.ASC_APP_ID }}
+          ASC_API_KEY_P8: ${{ secrets.ASC_API_KEY_P8 }}
+          ASC_API_KEY_ID: ${{ secrets.ASC_API_KEY_ID }}
+          ASC_API_KEY_ISSUER_ID: ${{ secrets.ASC_API_KEY_ISSUER_ID }}
+        run: |
+          missing=0
+          if [ -z "$EXPO_TOKEN" ]; then
+            echo "::error::Missing required GitHub Secret: EXPO_TOKEN (create at https://expo.dev/settings/access-tokens)"
+            missing=1
+          fi
+          if [ -z "$EXPO_PROJECT_ID" ]; then
+            echo "::error::Missing required GitHub Secret: EXPO_PROJECT_ID (UUID from your Expo project page at https://expo.dev)"
+            missing=1
+          fi
+          if [ "${{ inputs.auto_submit }}" != "false" ]; then
+            if [ -z "$ASC_APP_ID" ]; then
+              echo "::warning::ASC_APP_ID secret not set — auto-submit requires your numeric App Store Connect App ID unless configured in Expo dashboard."
+            fi
+            if [ -n "$ASC_API_KEY_P8" ] && { [ -z "$ASC_API_KEY_ID" ] || [ -z "$ASC_API_KEY_ISSUER_ID" ]; }; then
+              echo "::error::ASC_API_KEY_P8 is set, so ASC_API_KEY_ID and ASC_API_KEY_ISSUER_ID must also be set."
+              missing=1
+            fi
+          fi
+          if [ "$missing" -ne 0 ] && [ "${{ inputs.dry_run }}" != "true" ]; then
+            echo "See docs/TESTFLIGHT_GITHUB_ACTIONS.md for the 5-minute setup checklist."
+            exit 1
+          fi
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Typecheck & verify native iOS prebuild
+        run: |
+          npx tsc --noEmit
+          npx expo config --type public --json > /dev/null
+          npx expo prebuild --platform ios --no-install --clean
+          rm -rf ios
+
+      - name: Stop here if dry_run is enabled
+        if: inputs.dry_run == 'true'
+        run: |
+          echo "Dry run complete: TypeScript, Expo config, and iOS Xcode prebuild succeeded!"
+
+      - name: Setup Expo & EAS CLI
+        if: inputs.dry_run != 'true'
+        uses: expo/expo-github-action@v8
         with:
           eas-version: latest
           token: ${{ secrets.EXPO_TOKEN }}
-      - name: Install dependencies
-        run: npm ci
-      - name: Typecheck before cloud build
-        run: npx tsc --noEmit
-      - name: Run EAS iOS Production Build (TestFlight)
+
+      - name: Configure App Store Connect API Key for non-interactive submit
+        if: inputs.dry_run != 'true'
+        env:
+          ASC_API_KEY_P8: ${{ secrets.ASC_API_KEY_P8 }}
+          ASC_API_KEY_ID: ${{ secrets.ASC_API_KEY_ID }}
+          ASC_API_KEY_ISSUER_ID: ${{ secrets.ASC_API_KEY_ISSUER_ID }}
+          ASC_APP_ID: ${{ secrets.ASC_APP_ID }}
+          APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
+        run: |
+          node -e '
+            const fs = require("node:fs");
+            const path = require("node:path");
+            const easPath = path.resolve("eas.json");
+            const eas = JSON.parse(fs.readFileSync(easPath, "utf8"));
+            eas.submit = eas.submit || {};
+            eas.submit.production = eas.submit.production || {};
+            const iosSubmit = { ...(eas.submit.production.ios || {}) };
+
+            if (process.env.ASC_APP_ID) iosSubmit.ascAppId = process.env.ASC_APP_ID.trim();
+            if (process.env.APPLE_TEAM_ID) iosSubmit.appleTeamId = process.env.APPLE_TEAM_ID.trim();
+
+            if (process.env.ASC_API_KEY_P8) {
+              const rawKey = process.env.ASC_API_KEY_P8.trim();
+              const decoded = rawKey.includes("BEGIN PRIVATE KEY")
+                ? rawKey
+                : Buffer.from(rawKey, "base64").toString("utf8");
+              const keyPath = path.join(process.env.RUNNER_TEMP || "/tmp", "asc_api_key.p8");
+              fs.writeFileSync(keyPath, decoded, { mode: 0o600 });
+              iosSubmit.ascApiKeyPath = keyPath;
+              iosSubmit.ascApiKeyId = process.env.ASC_API_KEY_ID.trim();
+              iosSubmit.ascApiKeyIssuerId = process.env.ASC_API_KEY_ISSUER_ID.trim();
+            }
+
+            eas.submit.production.ios = iosSubmit;
+            fs.writeFileSync(easPath, JSON.stringify(eas, null, 2));
+            console.log("Configured eas.json submit.production.ios keys:", Object.keys(iosSubmit));
+          '
+
+      - name: Trigger EAS iOS Production Build (TestFlight)
+        if: inputs.dry_run != 'true'
         run: |
           if [ "${{ inputs.auto_submit }}" = "false" ]; then
             eas build --platform ios --profile production --non-interactive --no-wait
